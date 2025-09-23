@@ -1,0 +1,27 @@
+{
+  "name": "ankiss",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.vite.json",
+    "test": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.vite.json && vitest run --coverage",
+    "runtest": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.1.1",
+    "@tsconfig/svelte": "^5.0.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "fast-check": "^4.3.0",
+    "svelte": "^5.38.1",
+    "svelte-check": "^4.3.1",
+    "typescript": "~5.8.3",
+    "vite": "npm:rolldown-vite@latest",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.4"
+  },
+  "packageManager": "yarn@4.10.2"
+}
