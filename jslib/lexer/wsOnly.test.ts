@@ -1,8 +1,7 @@
 import { expect, test } from 'vitest';
 import fc from 'fast-check';
-import { lex } from 'lexer/wsOnly';
-import type { Token } from 'lexer';
-import type { Tag } from 'lexer/wsOnly';
+import { lex, type Tag } from '#lexer/wsOnly';
+import type { Token } from '#lexer';
 
 function checkHarness(predicate: (s:string, r:Token<Tag>[]) => any) {
   fc.assert(
@@ -186,5 +185,5 @@ test.for([
   ['\\u3001', '\\uD7FF', 0x3001, 0xD7FF],
   ['\\uD800', '\\uDFFF', 0xD800, 0xDFFF],
   ['\\uE000', '\\uFFFF', 0xE000, 0xFFFF],
-  ['\\u{10000}', '\\u{10FFFF}', 0x10000, 0x10FFFF]] as [string, string, number, number][])(
+  ['\\u{10000}', '\\u{10FFFF}', 0x10000, 0x10FFFF]] as const)(
     '%s-%s classified as <nonws>', ([,, low, high]) => checkWithinTokenRange({ low, high }, 'nonws'));

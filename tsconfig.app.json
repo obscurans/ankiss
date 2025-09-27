@@ -15,7 +15,10 @@
     "checkJs": true,
     "isolatedModules": true,
     "moduleDetection": "force",
-    "baseUrl": "./jslib"
+    "baseUrl": ".",
+    "paths": {
+      "#*": ["jslib/*"]
+    }
   },
   "include": ["jslib/**/*.ts", "jslib/**/*.js", "jslib/**/*.svelte"]
 }

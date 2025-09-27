@@ -1,4 +1,5 @@
-import type { LexStream } from 'lexer';
+import { devAssert } from '#util';
+import type { LexStream } from '#lexer';
 
 export type Tag = 'nl' | 'ws' | 'nonws';
 
@@ -18,10 +19,10 @@ export function* lex(str: string): LexStream<Tag> {
       } else if (g.ws !== void 0) {
         return 'ws';
       } else if (import.meta.env.PROD || g.nonws !== void 0) {
-        // Regex is irrefutable, see tests for proof.
+        // regex is irrefutable, see tests for proof
         return 'nonws';
-      /* v8 ignore next */ }
-      throw 'Unreachable';
+      /* v8 ignore start */ }
+      devAssert(false); /* v8 ignore stop */
     }
 
     yield {
