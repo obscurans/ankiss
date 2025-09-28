@@ -138,7 +138,7 @@ function arbLineBreak(lineMax: number, tokenMax: number): Arbitrary<FakeLineBrea
   return fc.tuple(
     arbTokenShort(tokenMax),
     fc.array(arbBlankLine(tokenMax), { maxLength: lineMax, depthIdentifier })
-  ).map(([f, r]) => new FakeLineBreak(f, r));
+  ).map((d) => new FakeLineBreak(...d));
 }
 
 // <ws> prefix for this level that is cumulative with those of ancestors, if children exist
@@ -297,28 +297,30 @@ export class FakeTree {
     let errorPlace: number | null = null, errorPropagate = false, errorSuccess = false;
     if (this.toplevel.length > 0) {
       // an error at top-level is possible even with 1 child; very first line must have no leading <ws>
-      const roll = injectError?.next()?.value ?? null;
-      if (roll !== null) {
-        errorPlace = roll % this.toplevel.length;
+      for (let tries = 0; tries < 5 && errorPlace === null; tries += 1) {
+        const roll = injectError?.next()?.value ?? null;
+        if (roll !== null) {
+          errorPlace = roll % this.toplevel.length;
 
-        // if previous top-level had zero children, injecting a leading <ws> actually looks like nesting,
-        // which therefore requires the chosen top-level to itself have children (to mismatch <ws>)
-        const toplevelInvalid = errorPlace > 0 &&
-          this.toplevel[errorPlace - 1].childCount() === 0 &&
-          this.toplevel[errorPlace].childCount() === 0;
+          // if previous top-level had zero children, injecting a leading <ws> actually looks like nesting,
+          // which therefore requires the chosen top-level to itself have children (to mismatch <ws>)
+          const toplevelInvalid = errorPlace > 0 &&
+            this.toplevel[errorPlace - 1].childCount() === 0 &&
+            this.toplevel[errorPlace].childCount() === 0;
 
-        if (this.toplevel.length > 1 && this.toplevel[errorPlace].childCount() > 1) {
-          // with a valid choice inside the child subtree, choose whether to propagate the error injection deeper
-          const roll = injectError?.next()?.value /* v8 ignore next */ ?? null;
-          if (roll !== null) {
-            // 1/4 chance of choosing to apply the error to the child root's leading <ws> directly (here) anyway
-            errorPropagate = toplevelInvalid || ((roll % 4) !== 0);
+          if (this.toplevel.length > 1 && this.toplevel[errorPlace].childCount() > 1) {
+            // with a valid choice inside the child subtree, choose whether to propagate the error injection deeper
+            const roll = injectError?.next()?.value /* v8 ignore next */ ?? null;
+            if (roll !== null) {
+              // 1/4 chance of choosing to apply the error to the child root's leading <ws> directly (here) anyway
+              errorPropagate = toplevelInvalid || ((roll % 4) !== 0);
+            }
           }
-        }
 
-        if (toplevelInvalid && !errorPropagate) {
-          // give up on this error injection
-          errorPlace = null;
+          if (toplevelInvalid && !errorPropagate) {
+            // give up on this error injection
+            errorPlace = null;
+          }
         }
       }
     }
