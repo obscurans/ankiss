@@ -7,6 +7,7 @@ export type NatLT<N extends number, T = never, R extends unknown[] = []> =
 export type Tuple<T, N extends number> = N extends N ? number extends N ? T[] : _TupleOf<T, N, []> : never;
 type _TupleOf<T, N extends number, R extends unknown[]> = R['length'] extends N ? R : _TupleOf<T, N, [T, ...R]>;
 
+/* v8 ignore start */
 export class AssertionError extends Error {
   constructor() {
     super('assertion failed');
@@ -21,5 +22,8 @@ export function devAssert(p: unknown): asserts p {
 }
 
 export function exhaustive(p: never) {
-  throw new AssertionError();
+  if (!import.meta.env.PROD) {
+    throw new AssertionError();
+  }
 }
+/* v8 ignore stop */
