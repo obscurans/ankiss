@@ -1,5 +1,8 @@
+// Copyright Jeffrey Tsang <jeffrey.tsang@ieee.org>
+// GNU AGPL, 3.0 or later <https://www.gnu.org/licenses/agpl-3.0.html>
+
 import { devAssert } from '#util';
-import type { LexStream } from '#lexer';
+import type { LexStream } from '#types';
 
 export type Tag = 'nl' | 'ws' | 'nonws';
 

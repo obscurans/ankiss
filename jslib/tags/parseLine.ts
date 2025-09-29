@@ -1,6 +1,9 @@
+// Copyright Jeffrey Tsang <jeffrey.tsang@ieee.org>
+// GNU AGPL, 3.0 or later <https://www.gnu.org/licenses/agpl-3.0.html>
+
 import { devAssert, exhaustive } from '#util';
-import { lex, type Tag } from '#lexer/wsOnly';
-import type { LexStream } from '#lexer';
+import { lex, type Tag } from '#tags/lexWsOnly';
+import type { LexStream } from '#types';
 
 export class TagError extends Error {
   constructor(message: string, options?: { cause: any }) {
@@ -187,7 +190,9 @@ export function* parse(str: string, tags: LexStream<Tag>): MappingStream {
   return;
 }
 
-// Convenience function to use wsOnly lexer
+// Convenience function to use associated wsOnly lexer
+/* v8 ignore start */
 export function parseDefault(str: string): MappingStream {
   return parse(str, lex(str));
 }
+/* v8 ignore stop */

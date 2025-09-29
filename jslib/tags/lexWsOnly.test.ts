@@ -1,7 +1,10 @@
+// Copyright Jeffrey Tsang <jeffrey.tsang@ieee.org>
+// GNU AGPL, 3.0 or later <https://www.gnu.org/licenses/agpl-3.0.html>
+
 import { expect, test } from 'vitest';
 import fc from 'fast-check';
-import { lex, type Tag } from '#lexer/wsOnly';
-import type { Token } from '#lexer';
+import { lex, type Tag } from '#tags/lexWsOnly';
+import type { Token } from '#types';
 
 function checkHarness(predicate: (s:string, r:Token<Tag>[]) => any) {
   fc.assert(

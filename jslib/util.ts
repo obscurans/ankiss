@@ -1,3 +1,6 @@
+// Copyright Jeffrey Tsang <jeffrey.tsang@ieee.org>
+// GNU AGPL, 3.0 or later <https://www.gnu.org/licenses/agpl-3.0.html>
+
 // Black magic for natural numbers strictly below n
 export type NatLT<N extends number, T = never, R extends unknown[] = []> =
  R['length'] extends N ? T : NatLT<N, T | R['length'], [...R, R['length']]>;

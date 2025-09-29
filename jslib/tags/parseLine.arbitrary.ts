@@ -1,8 +1,11 @@
+// Copyright Jeffrey Tsang <jeffrey.tsang@ieee.org>
+// GNU AGPL, 3.0 or later <https://www.gnu.org/licenses/agpl-3.0.html>
+
 import fc from 'fast-check';
 import type { Arbitrary } from 'fast-check';
 import { type NatLT, type Tuple, devAssert } from '#util';
-import type { LexStream, Token } from '#lexer';
-import type { Tag } from '#lexer/wsOnly';
+import type { LexStream, Token } from '#types';
+import type { Tag } from '#tags/lexWsOnly';
 
 export type ParseInput = [string, LexStream<Tag>];
 
@@ -368,6 +371,6 @@ export function arbTree(maxDepth: number, childMax: number, lineMax: number, tok
 }
 
 // Mix of different tree shapes (wider vs deeper, etc)
-export const arbTreeMix: Arbitrary<FakeTree> = fc.oneof(arbTree(5, 5, 5, 5), arbTree(10, 3, 5, 5), arbTree(3, 10, 5, 5), arbTree(3, 3, 10, 10));
+export const arbTreeMix: Arbitrary<FakeTree> = fc.oneof(arbTree(6, 6, 6, 6), arbTree(10, 4, 6, 6), arbTree(4, 10, 6, 6), arbTree(4, 4, 10, 10));
 export const arbError: Arbitrary<Iterator<number>> = fc.infiniteStream(fc.maxSafeNat());
 export const arbTreeWithError: Arbitrary<[FakeTree, Iterator<number>]> = fc.tuple(arbTreeMix, arbError);

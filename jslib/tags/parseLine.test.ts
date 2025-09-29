@@ -1,9 +1,12 @@
+// Copyright Jeffrey Tsang <jeffrey.tsang@ieee.org>
+// GNU AGPL, 3.0 or later <https://www.gnu.org/licenses/agpl-3.0.html>
+
 import { expect, test } from 'vitest';
 import fc from 'fast-check';
-import { parse, TagError, type TagMapping } from '#parser/tagFile';
-import { arbTreeMix, arbTreeWithError, FakeNesting, FakeTree, type ParseInput } from '#parser/tagFile.arbitrary';
-import type { Token } from '#lexer';
-import type { Tag } from '#lexer/wsOnly';
+import { parse, TagError, type TagMapping } from '#tags/parseLine';
+import { arbTreeMix, arbTreeWithError, FakeNesting, FakeTree, type ParseInput } from '#tags/parseLine.arbitrary';
+import type { Token } from '#types';
+import type { Tag } from '#tags/lexWsOnly';
 
 type HarnessPredicate = (s:string, l:Token<Tag>[], r:TagMapping[]) => any;
 
