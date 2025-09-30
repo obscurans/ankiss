@@ -7,6 +7,7 @@ export type NatLT<N extends number, T = never, R extends unknown[] = []> =
 
 // Black magic for a fixed-length homogeneous array
 // N can be a union of numbers: Tuple<number, 0 | 2 | 4> = [] | [number, number] | [number, number, number, number]
+// Anders Hejlsberg <https://github.com/microsoft/TypeScript/pull/40002>
 export type Tuple<T, N extends number> = N extends N ? number extends N ? T[] : _TupleOf<T, N, []> : never;
 type _TupleOf<T, N extends number, R extends unknown[]> = R['length'] extends N ? R : _TupleOf<T, N, [T, ...R]>;
 
