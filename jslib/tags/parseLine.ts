@@ -2,8 +2,7 @@
 // GNU AGPL, 3.0 or later <https://www.gnu.org/licenses/agpl-3.0.html>
 
 import { devAssert, exhaustive } from '#util';
-import { lex, type Tag } from '#tags/lexWsOnly';
-import type { LexStream } from '#types';
+import { lex, type LexStream, type Tag } from '#tags/lexWsOnly';
 
 export class TagError extends Error {
   constructor(message: string, options?: { cause: any }) {

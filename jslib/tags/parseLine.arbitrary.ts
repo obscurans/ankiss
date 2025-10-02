@@ -4,50 +4,48 @@
 import fc from 'fast-check';
 import type { Arbitrary } from 'fast-check';
 import { type NatLT, type Tuple, devAssert } from '#util';
-import type { LexStream, Token } from '#types';
-import type { Tag } from '#tags/lexWsOnly';
-
-export type ParseInput = [string, LexStream<Tag>];
+import type { Tag, Token } from '#tags/lexWsOnly';
 
 const depthIdentifier = fc.createDepthIdentifier();
 
-// Represented by nonempty array of small numbers, which are indices into a translation.
-// <nl>, <ws>, <nonws> have different mappings, which have *faked* semantics, as parser should use lexer output
-// Each mapping has both single/multi codepoint/codeunit occurrences.
 class FakeToken {
-  data: NatLT<8>[];
+  str: string;
+  tag: Tag;
 
-  constructor(data: NatLT<8>[]) {
-    this.data = data;
-  }
-
-  translate(mapping: Tuple<string, 8>): string {
-    return this.data.map((i) => mapping[i]).join('');
-  }
-
-  toNl(): string {
-    return this.translate(['a', 'b', '\u1000', '\u1001', String.fromCodePoint(0x10300), String.fromCodePoint(0x10301), 'cd', '\u1002\u1003']);
-  }
-
-  toWs(): string {
-    return this.translate(['e', 'f', '\u1010', '\u1011', String.fromCodePoint(0x10310), String.fromCodePoint(0x10311), 'gh', '\u1012\u1013']);
-  }
-
-  toNonws(): string {
-    return this.translate(['i', 'j', '\u1020', '\u1021', String.fromCodePoint(0x10320), String.fromCodePoint(0x10321), 'kl', '\u1022\u1023']);
+  constructor(str: string, tag: Tag) {
+    this.str = str;
+    this.tag = tag;
   }
 }
 
-function arbToken(maxLength: number): Arbitrary<FakeToken> {
-  return fc.array(fc.nat(7) as Arbitrary<NatLT<8>>, { minLength: 1, maxLength }).map((d) => new FakeToken(d));
+// <nl>, <ws>, <nonws> have different possible substring units, which have *faked* semantics, as parser should use lexer output
+// Each mapping has both single/multi codepoint/codeunit occurrences.
+function arbNl(maxLength: number): Arbitrary<FakeToken> {
+  return fc.string({
+    unit: fc.constantFrom('a', 'b', '\u1000', '\u1001', String.fromCodePoint(0x10300), String.fromCodePoint(0x10301), 'cd', '\u1002\u1003'),
+    minLength: 1,
+    maxLength: Math.max(Math.ceil(maxLength / 2), 2), // <nl> is half the length of other tokens
+  }).map((s) => new FakeToken(s, 'nl'));
 }
 
-function arbTokenShort(maxLength: number): Arbitrary<FakeToken> {
-  return arbToken(Math.max(Math.ceil(maxLength / 2), 2));
+function arbWs(maxLength: number): Arbitrary<FakeToken> {
+  return fc.string({
+    unit: fc.constantFrom('e', 'f', '\u1010', '\u1011', String.fromCodePoint(0x10310), String.fromCodePoint(0x10311), 'gh', '\u1012\u1013'),
+    minLength: 1,
+    maxLength,
+  }).map((s) => new FakeToken(s, 'ws'));
+}
+
+function arbNonws(maxLength: number): Arbitrary<FakeToken> {
+  return fc.string({
+    unit: fc.constantFrom('i', 'j', '\u1020', '\u1021', String.fromCodePoint(0x10320), String.fromCodePoint(0x10321), 'kl', '\u1022\u1023'),
+    minLength: 1,
+    maxLength,
+  }).map((s) => new FakeToken(s, 'nonws'));
 }
 
 // Helper to accumulate generated AST to (raw string, lexer token stream) expected by parse()
-export class Accumulator {
+class Accumulator {
   raw: string;
   tokens: Token<Tag>[];
 
@@ -56,25 +54,11 @@ export class Accumulator {
     this.tokens = new Array();
   }
 
-  appendNl(token: FakeToken) {
+  appendToken(token: FakeToken) {
     const start = this.raw.length;
-    this.raw += token.toNl();
+    this.raw += token.str;
     devAssert(this.raw.length > start);
-    this.tokens.push({ tag: 'nl', start, end: this.raw.length });
-  }
-
-  appendWs(token: FakeToken) {
-    const start = this.raw.length;
-    this.raw += token.toWs();
-    devAssert(this.raw.length > start);
-    this.tokens.push({ tag: 'ws', start, end: this.raw.length });
-  }
-
-  appendNonws(token: FakeToken) {
-    const start = this.raw.length;
-    this.raw += token.toNonws();
-    devAssert(this.raw.length > start);
-    this.tokens.push({ tag: 'nonws', start, end: this.raw.length });
+    this.tokens.push({ tag: token.tag, start, end: this.raw.length });
   }
 
   // Used for specific constructed whitespace at start of line (including possible injected error)
@@ -89,26 +73,33 @@ export class Accumulator {
 // Represents one nonempty line (not including leading whitespace): <nonws>(<ws><nonws>)*<ws>?
 class FakeLineTail {
   label: FakeToken;
-  rest: FakeToken[];
+  rest: [FakeToken, FakeToken][];
+  trailing: FakeToken | null;
 
-  constructor(data: FakeToken[]) {
-    [this.label, ...this.rest] = data;
+  constructor(label: FakeToken, rest: [FakeToken, FakeToken][], trailing: FakeToken | null) {
+    this.label = label;
+    this.rest = rest;
+    this.trailing = trailing;
   }
 
   accumulateTo(acc: Accumulator) {
-    acc.appendNonws(this.label);
+    acc.appendToken(this.label);
     for (let i = 0; i < this.rest.length; i++) {
-      if ((i & 1) === 1) {
-        acc.appendNonws(this.rest[i]);
-      } else {
-        acc.appendWs(this.rest[i]);
-      }
+      acc.appendToken(this.rest[i][0]);
+      acc.appendToken(this.rest[i][1]);
+    }
+    if (this.trailing !== null) {
+      acc.appendToken(this.trailing);
     }
   }
 }
 
 function arbLineTail(lineMax: number, tokenMax: number): Arbitrary<FakeLineTail> {
-  return fc.array(arbToken(tokenMax), { minLength: 1, maxLength: lineMax, depthIdentifier }).map((d) => new FakeLineTail(d));
+  return fc.tuple(
+    arbNonws(tokenMax),
+    fc.array(fc.tuple(arbWs(tokenMax), arbNonws(tokenMax)), { maxLength: lineMax, depthIdentifier }),
+    fc.option(arbWs(tokenMax), { freq: 2 })
+  ).map((d) => new FakeLineTail(...d));
 }
 
 // Represents a <nl>, with possible <ws>-only lines after: <nl>(<ws>?<nl>)*
@@ -123,24 +114,23 @@ class FakeLineBreak {
   }
 
   accumulateTo(acc: Accumulator) {
-    acc.appendNl(this.first);
+    acc.appendToken(this.first);
     for (const [ws, nl] of this.rest) {
       if (ws !== null) {
-        acc.appendWs(ws);
+        acc.appendToken(ws);
       }
-      acc.appendNl(nl);
+      acc.appendToken(nl);
     }
   }
 }
 
-function arbBlankLine(maxLength: number) {
-  return fc.tuple(fc.oneof(fc.constant(null), arbToken(maxLength)), arbTokenShort(maxLength));
-}
-
 function arbLineBreak(lineMax: number, tokenMax: number): Arbitrary<FakeLineBreak> {
   return fc.tuple(
-    arbTokenShort(tokenMax),
-    fc.array(arbBlankLine(tokenMax), { maxLength: lineMax, depthIdentifier })
+    arbNl(tokenMax),
+    fc.array(
+      fc.tuple(fc.option(arbWs(tokenMax), { freq: 2 }), arbNl(tokenMax)),
+      { maxLength: lineMax, depthIdentifier }
+    )
   ).map((d) => new FakeLineBreak(...d));
 }
 
@@ -175,7 +165,7 @@ export class FakeNesting {
   // Callback: total prefix, the child, is the last child, is selected for error injection
   forEachChild(wsPrefix: string, errorPlace: number | null, callback: (p:string, c:FakeNesting, l:boolean, e:boolean) => any) {
     if (this.subtree !== null) {
-      const totalPrefix = wsPrefix + this.subtree.prefix.toWs();
+      const totalPrefix = wsPrefix + this.subtree.prefix.str;
       const lastChild = this.childCount() - 1;
 
       this.subtree.children.forEach((child, i) =>
@@ -183,7 +173,7 @@ export class FakeNesting {
           totalPrefix,
           child,
           i === lastChild,
-          errorPlace === null ? false : i === errorPlace
+          errorPlace !== null && i === errorPlace
         ));
     }
   }
@@ -257,12 +247,12 @@ function arbNesting(maxDepth: number, childMax: number, lineMax: number, tokenMa
     nest: fc.tuple(
       arbLineTail(lineMax, tokenMax),
       arbLineBreak(lineMax, tokenMax),
-      fc.oneof({ withCrossShrink: true, maxDepth, depthSize: 'max', depthIdentifier },
-        fc.constant(null),
+      fc.option(
         fc.record({
-          prefix: arbToken(tokenMax),
+          prefix: arbWs(tokenMax),
           children: fc.array(r('nest') as Arbitrary<FakeNesting>, { minLength: 1, maxLength: childMax, depthIdentifier })
-        })
+        }),
+        { freq: 4, maxDepth, depthSize: 'max', depthIdentifier }
       )
     ).map((x) => new FakeNesting(...x)),
   })).nest;
@@ -289,7 +279,7 @@ export class FakeTree {
     if (this.prefix !== null) {
       if (Array.isArray(this.prefix)) {
         const [ws, lineBreak] = this.prefix;
-        acc.appendWs(ws);
+        acc.appendToken(ws);
         lineBreak.accumulateTo(acc);
       } else {
         // typeof prefix === FakeLineBreak
@@ -349,28 +339,37 @@ export class FakeTree {
   toParseInput(): ParseInput {
     const acc = new Accumulator();
     devAssert(!this.accumulateTo(acc, null));
-    return [acc.raw, acc.tokens];
+    return [this, acc.raw, acc.tokens];
   }
 
   // Returns null if error injection failed
   toParseInputWithError(injectError: Iterator<number>): ParseInput | null {
     const acc = new Accumulator();
     if (this.accumulateTo(acc, injectError)) {
-      return [acc.raw, acc.tokens];
+      return [this, acc.raw, acc.tokens];
     }
     return null;
   }
 }
 
-export function arbTree(maxDepth: number, childMax: number, lineMax: number, tokenMax: number): Arbitrary<FakeTree> {
+function arbTree(maxDepth: number, childMax: number, lineMax: number, tokenMax: number): Arbitrary<FakeTree> {
   return fc.tuple(
-    fc.oneof(fc.constant(null), arbLineBreak(lineMax, tokenMax), fc.tuple(arbToken(tokenMax), arbLineBreak(lineMax, tokenMax))),
+    fc.oneof(
+      fc.constant(null),
+      arbLineBreak(lineMax, tokenMax),
+      fc.tuple(arbWs(tokenMax), arbLineBreak(lineMax, tokenMax))
+    ),
     fc.array(arbNesting(maxDepth - 1, childMax, lineMax, tokenMax), { maxLength: childMax, depthIdentifier }),
     fc.boolean(),
   ).map((x) => new FakeTree(...x));
 }
 
 // Mix of different tree shapes (wider vs deeper, etc)
-export const arbTreeMix: Arbitrary<FakeTree> = fc.oneof(arbTree(6, 6, 6, 6), arbTree(10, 4, 6, 6), arbTree(4, 10, 6, 6), arbTree(4, 4, 10, 10));
-export const arbError: Arbitrary<Iterator<number>> = fc.infiniteStream(fc.maxSafeNat());
-export const arbTreeWithError: Arbitrary<[FakeTree, Iterator<number>]> = fc.tuple(arbTreeMix, arbError);
+const arbTreeMix: Arbitrary<FakeTree> = fc.oneof(arbTree(6, 6, 6, 6), arbTree(10, 4, 6, 6), arbTree(4, 10, 6, 6), arbTree(4, 4, 10, 10));
+const arbError: Arbitrary<Iterator<number>> = fc.infiniteStream(fc.maxSafeNat());
+const arbTreeWithError: Arbitrary<[FakeTree, Iterator<number>]> = fc.tuple(arbTreeMix, arbError);
+
+export type ParseInput = [FakeTree, string, Token<Tag>[]];
+
+export const arbInput: Arbitrary<ParseInput> = arbTreeMix.map((t) => t.toParseInput());
+export const arbInputWithError: Arbitrary<ParseInput> = arbTreeWithError.map(([t, e]) => t.toParseInputWithError(e)).filter((x) => x !== null);

@@ -3,83 +3,86 @@
 
 import { expect, test } from 'vitest';
 import fc from 'fast-check';
-import { lex, type Tag } from '#tags/lexWsOnly';
-import type { Token } from '#types';
+import type { Arbitrary } from 'fast-check';
+import { lex, type Tag, type Token } from '#tags/lexWsOnly';
+
+test('empty string returns empty result', () => {
+  expect(Array.from(lex(''))).toEqual([]);
+});
+
+const arbLexResult: Arbitrary<[string, Token<Tag>[]]> = fc.string({ unit: 'binary' }).map((s) => [s, Array.from(lex(s))]);
 
 function checkHarness(predicate: (s:string, r:Token<Tag>[]) => any) {
   fc.assert(
-    fc.property(
-      fc.string({ unit: 'binary' }),
-      (s) => predicate(s, Array.from(lex(s)))
-    ),
-    { examples: [['']] },
+    fc.property(arbLexResult, (d) => predicate(...d)),
+    { examples: [[ ['', []] ]]},
   );
 }
 
 test('only empty string returns empty result', () => {
-  checkHarness((s, r) => {
-    expect(r.length === 0).toBe(s.length === 0);
+  checkHarness((str, result) => {
+    expect(result.length === 0).toBe(str.length === 0);
   });
 });
 
 test('first token starts at 0', () => {
-  checkHarness((_, r) => {
-    if (r.length > 0) {
-      expect(r[0].start).toBe(0);
+  checkHarness((_str, result) => {
+    if (result.length > 0) {
+      expect(result[0].start).toBe(0);
     }
   });
 });
 
 test('adjacent tokens are contiguous', () => {
-  checkHarness((_, r) => {
-    for (let i = 0; i < r.length - 1; i++) {
-      expect(r[i].end).toBe(r[i + 1].start);
+  checkHarness((_str, result) => {
+    for (let i = 0; i < result.length - 1; i++) {
+      expect(result[i].end).toBe(result[i + 1].start);
     }
   });
 });
 
 test('last token ends at end of input', () => {
-  checkHarness((s, r) => {
-    if (r.length > 0) {
-      expect(r[r.length - 1].end).toBe(s.length);
+  checkHarness((str, result) => {
+    if (result.length > 0) {
+      expect(result[result.length - 1].end).toBe(str.length);
     }
   });
 });
 
 test('all tokens nonempty', () => {
-  checkHarness((_, r) => {
-    r.forEach(({ start, end }) => {
+  checkHarness((_str, result) => {
+    result.forEach(({ start, end }) => {
       expect(end).toBeGreaterThan(start);
     });
   });
 });
 
 test('adjacent <ws> tokens never appear', () => {
-  checkHarness((_, r) => {
-    for (let i = 0; i < r.length - 1; i++) {
-      if ((r[i].tag === 'ws') && (r[i + 1].tag === 'ws')) {
-        throw r;
+  checkHarness((_str, result) => {
+    for (let i = 0; i < result.length - 1; i++) {
+      if ((result[i].tag === 'ws') && (result[i + 1].tag === 'ws')) {
+        throw result;
       }
     }
   });
 });
 
 test('adjacent <nonws> tokens never appear', () => {
-  checkHarness((_, r) => {
-    for (let i = 0; i < r.length - 1; i++) {
-      if ((r[i].tag === 'nonws') && (r[i + 1].tag === 'nonws')) {
-        throw r;
+  checkHarness((_str, result) => {
+    for (let i = 0; i < result.length - 1; i++) {
+      if ((result[i].tag === 'nonws') && (result[i + 1].tag === 'nonws')) {
+        throw result;
       }
     }
   });
 });
 
 test('all <nl> tokens are length 1 except \\r\\n', () => {
-  checkHarness((s, r) => {
-    r.filter(({ tag }) => tag === 'nl')
+  checkHarness((str, result) => {
+    result.filter(({ tag }) => tag === 'nl')
       .forEach(({ start, end }) => {
         if (end === start + 2) {
-          expect(s.substring(start, end)).toBe('\r\n');
+          expect(str.substring(start, end)).toBe('\r\n');
         } else {
           expect(end).toBe(start + 1);
         }
@@ -93,16 +96,16 @@ function checkHarnessForce(force: string, predicate: (s:string, i:number, r:Toke
       fc.string({ unit: 'binary' }),
       fc.string({ unit: 'binary' }),
       (s1, s2) => {
-        const s = s1 + force + s2;
-        return predicate(s, s1.length, Array.from(lex(s)))
+        const str = s1 + force + s2;
+        return predicate(str, s1.length, Array.from(lex(str)))
       }
     ),
   );
 }
 
 function checkSpecificToken(force: string, expected: Tag) {
-  return checkHarnessForce(force, (s, i, r) => {
-    expect(r.filter(({ tag, start, end }) => tag === expected && start === i && end === i + force.length)
+  return checkHarnessForce(force, (_str, idx, result) => {
+    expect(result.filter(({ tag, start, end }) => tag === expected && start === idx && end === idx + force.length)
       .length).toBe(1);
   });
 }
@@ -116,8 +119,8 @@ test.for([
     '%s is a single <nl> token', ([, s]) => checkSpecificToken(s, 'nl'));
 
 function checkWithinToken(force: string, expected: Tag) {
-  return checkHarnessForce(force, (s, i, r) => {
-    expect(r.filter(({ tag, start, end }) => tag === expected && start <= i && end >= i + force.length)
+  return checkHarnessForce(force, (_str, idx, result) => {
+    expect(result.filter(({ tag, start, end }) => tag === expected && start <= idx && end >= idx + force.length)
       .length).toBe(1);
   });
 }
@@ -128,10 +131,10 @@ test.for([
     '%s classified as <nl>', ([, s]) => checkWithinToken(s, 'nl'));
 
 test('\\r and \\n are never consecutive tokens', () => {
-  checkHarnessForce('\r\n', (s, _, r) => {
-    for (let i = 0; i < r.length - 1; i++) {
-      if (s.substring(r[i].start, r[i].end) === '\r' && s.substring(r[i + 1].start, r[i + 1].end) === '\n') {
-        throw r;
+  checkHarnessForce('\r\n', (str, _idx, result) => {
+    for (let i = 0; i < result.length - 1; i++) {
+      if (str.substring(result[i].start, result[i].end) === '\r' && str.substring(result[i + 1].start, result[i + 1].end) === '\n') {
+        throw result;
       }
     }
   });
@@ -154,9 +157,9 @@ function checkHarnessRange(force: { low: number, high: number }, predicate: (f:s
       fc.integer({ min: force.low, max: force.high }),
       fc.string({ unit: 'binary' }),
       (s1, n, s2) => {
-        const f = String.fromCodePoint(n);
-        const s = s1 + f + s2;
-        return predicate(f, s, s1.length, Array.from(lex(s)))
+        const forced = String.fromCodePoint(n);
+        const str = s1 + forced + s2;
+        return predicate(forced, str, s1.length, Array.from(lex(str)))
       }
     ),
   );
@@ -164,8 +167,8 @@ function checkHarnessRange(force: { low: number, high: number }, predicate: (f:s
 
 // force is a range of Unicode code points
 function checkWithinTokenRange(force: { low: number, high: number }, expected: Tag) {
-  return checkHarnessRange(force, (f, _, i, r) => {
-    expect(r.filter(({ tag, start, end }) => tag === expected && start <= i && end >= i + f.length)
+  return checkHarnessRange(force, (forced, _str, idx, result) => {
+    expect(result.filter(({ tag, start, end }) => tag === expected && start <= idx && end >= idx + forced.length)
       .length).toBe(1);
   });
 }

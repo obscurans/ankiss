@@ -4,6 +4,7 @@
 import { devAssert } from '#util';
 import type { LexStream } from '#types';
 
+export type { LexStream, Token } from '#types';
 export type Tag = 'nl' | 'ws' | 'nonws';
 
 export function* lex(str: string): LexStream<Tag> {
